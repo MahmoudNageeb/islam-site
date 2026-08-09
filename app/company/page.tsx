@@ -47,6 +47,8 @@ export default function CompanyPage() {
   const [ownerResult, setOwnerResult] = useState<any>(null); // نتيجة المهمة من الرئيس
   const [attachedFiles, setAttachedFiles] = useState<any[]>([]); // 📎 ملفات مرفوعة مع المهمة
   const [uploading, setUploading] = useState(false);         // بيترفع دلوقتي؟
+  const [liveTime, setLiveTime] = useState(new Date());      // ⏱️ وقت الحي
+  const [actionModal, setActionModal] = useState<{ type: string; title: string; placeholder: string; onSubmit: (val: string) => void } | null>(null);
 
   const load = async () => {
     try {
@@ -73,7 +75,12 @@ export default function CompanyPage() {
     } catch (e: any) { setErr(e.message); }
   };
 
-  useEffect(() => { load(); const t = setInterval(load, 10000); return () => clearInterval(t); }, []);
+  useEffect(() => {
+    load();
+    const t = setInterval(load, 10000);
+    const clock = setInterval(() => setLiveTime(new Date()), 1000);
+    return () => { clearInterval(t); clearInterval(clock); };
+  }, []);
 
   const act = async (path: string, body: any, okMsg: string) => {
     try {
@@ -107,80 +114,120 @@ export default function CompanyPage() {
     } catch { /* تجاهل */ }
   };
 
-  // ═══════ الإجراءات ═══════
-  const compete = async () => {
-    const task = prompt('🎯 المهمة التنافسية؟ (مثال: حسّن أداء API)');
-    if (!task) return;
-    const empIds = (state?.employees || []).filter((e: any) => e.status === 'active').map((e: any) => e.id);
-    if (empIds.length === 0) { setErr('مفيش موظفين نشطين'); setTimeout(() => setErr(''), 3000); return; }
-    setAgentResult({ working: true, working_msg: '⏳ إسلام بيوزّع المهمة على الموظفين... كل موظف يشتغل ويبعت النتيجة' });
-    await act('company/compete', { task, employee_ids: empIds }, '🎯 التنافس بدأ');
+  // ═══════ الإجراءات (كلها عبر actionModal — بدل prompt/confirm القديمة) ═══════
+  const compete = () => {
+    setActionModal({
+      type: 'text', title: '🎯 مهمة تنافسية جديدة', placeholder: 'مثال: حسّن أداء API',
+      onSubmit: (task) => {
+        const empIds = (state?.employees || []).filter((e: any) => e.status === 'active').map((e: any) => e.id);
+        if (empIds.length === 0) { setErr('مفيش موظفين نشطين'); setTimeout(() => setErr(''), 3000); return; }
+        setAgentResult({ working: true, working_msg: '⏳ إسلام بيوزّع المهمة على الموظفين... كل موظف يشتغل ويبعت النتيجة' });
+        act('company/compete', { task, employee_ids: empIds }, '🎯 التنافس بدأ');
+      }
+    });
   };
 
   const hire = (id: string) => {
     const name = market.find(c => c.id === id)?.name || '';
-    if (confirm(`🤝 توظيف "${name}"؟ التكلفة 300 XPC`)) act('company/hire', { cand_id: id }, '✅ انضم للفريق');
+    setActionModal({
+      type: 'confirm', title: `🤝 توظيف «${name}»؟`, placeholder: '',
+      onSubmit: () => act('company/hire', { cand_id: id }, '✅ انضم للفريق')
+    });
   };
   const train = (id: string, name: string) => {
-    const cap = prompt(`🎓 تدريب ${name} — على إيه؟ (مثال: Kubernetes)`);
-    if (cap) act('company/train', { employee_id: id, capability: cap }, '📚 اتدرب على');
+    setActionModal({
+      type: 'text', title: `🎓 تدريب ${name}`, placeholder: 'مثال: Kubernetes',
+      onSubmit: (cap) => { if (cap) act('company/train', { employee_id: id, capability: cap }, '📚 اتدرب على'); }
+    });
   };
   const trainDirect = (id: string, name: string) => {
-    const cap = prompt(`🎓 تدريب مباشر لـ ${name} — على إيه؟ (الموظف هيشتغل فعلياً والنتيجة هتيجي تيليجرام)`);
-    if (!cap) return;
-    const instr = prompt(`📝 تعليمات إضافية؟ (اختياري)`);
-    act('company/train/direct', { employee_id: id, capability: cap, instructions: instr || '' }, '🎓 تدريب مباشر على ' + cap);
+    setActionModal({
+      type: 'text', title: `🎓 تدريب مباشر لـ ${name}`, placeholder: 'المهارة — الموظف هيشتغل فعلياً والنتيجة هتيجي تيليجرام',
+      onSubmit: (cap) => {
+        if (!cap) return;
+        const instr = window.prompt('📝 تعليمات إضافية؟ (اختياري)');
+        act('company/train/direct', { employee_id: id, capability: cap, instructions: instr || '' }, '🎓 تدريب مباشر على ' + cap);
+      }
+    });
   };
   const addXp = (id: string, name: string) => {
-    const xp = prompt(`🎖️ XP لـ ${name} — كام؟ (مثال: 200)`);
-    if (xp) act('company/xp', { employee_id: id, xp: parseInt(xp), reason: 'ترقية يدوية' }, '⚡ XP اتضاف');
+    setActionModal({
+      type: 'text', title: `🎖️ XP لـ ${name}`, placeholder: 'مثال: 200',
+      onSubmit: (xp) => { if (xp) act('company/xp', { employee_id: id, xp: parseInt(xp), reason: 'ترقية يدوية' }, '⚡ XP اتضاف'); }
+    });
   };
   const fire = (id: string, name: string) => {
-    const reason = prompt(`🚪 رفد ${name} — السبب؟`);
-    if (reason !== null) act('company/fire', { employee_id: id, reason: reason || 'قرار إداري' }, '🚪 اترفد');
+    setActionModal({
+      type: 'confirm', title: `🚪 رفد «${name}»؟`, placeholder: '',
+      onSubmit: () => act('company/fire', { employee_id: id, reason: 'قرار إداري' }, '🚪 اترفد')
+    });
   };
   const promote = (id: string, name: string) => {
-    if (confirm(`🏆 ترقية ${name}؟`) ) act('company/promote', { employee_id: id }, '🏆 اترقى');
+    setActionModal({
+      type: 'confirm', title: `🏆 ترقية «${name}»؟`, placeholder: '',
+      onSubmit: () => act('company/promote', { employee_id: id }, '🏆 اترقى')
+    });
   };
   const reinstate = (id: string, name: string) => {
-    if (confirm(`🔄 إعادة تفعيل ${name}؟`)) act('company/reinstate', { employee_id: id }, '🔄 اترجع');
+    setActionModal({
+      type: 'confirm', title: `🔄 إعادة تفعيل «${name}»؟`, placeholder: '',
+      onSubmit: () => act('company/reinstate', { employee_id: id }, '🔄 اترجع')
+    });
   };
   const mkDept = () => {
-    const name = prompt('📂 اسم القسم الجديد؟');
-    if (name) act('company/departments/create', { name }, '📂 قسم اتضاف');
+    setActionModal({
+      type: 'text', title: '📂 اسم القسم الجديد', placeholder: 'مثال: قسم الأمن السيبراني',
+      onSubmit: (name) => { if (name) act('company/departments/create', { name }, '📂 قسم اتضاف'); }
+    });
   };
   const delDept = (id: string, name: string) => {
-    if (confirm(`🗑️ حذف قسم "${name}"؟ الموظفين هيرجعوا بلا قسم`)) act('company/departments/delete', { department_id: id }, '🗑️ قسم اتشال');
+    setActionModal({
+      type: 'confirm', title: `🗑️ حذف قسم «${name}»؟`, placeholder: '',
+      onSubmit: () => act('company/departments/delete', { department_id: id }, '🗑️ قسم اتشال')
+    });
   };
   const setManager = (dId: string, dName: string) => {
     const emps = (state?.employees || []).filter((e: any) => e.status === 'active');
     const list = emps.map((e: any) => `${e.id} — ${e.name} (${e.role})`).join('\n');
-    const pick = prompt(`👔 اختر مدير لـ "${dName}" من الموظفين:\n${list}\n\nاكتب الـ id (مثال: developer)`);
-    if (pick) act('company/departments/manager', { department_id: dId, employee_id: pick.trim() }, '👔 مدير اتحدد');
+    setActionModal({
+      type: 'text', title: `👔 اختر مدير لـ «${dName}»`, placeholder: `اكتب الـ id:\n${list}`,
+      onSubmit: (pick) => { if (pick) act('company/departments/manager', { department_id: dId, employee_id: pick.trim() }, '👔 مدير اتحدد'); }
+    });
   };
   const assignDept = (eId: string, eName: string) => {
     const list = depts.map((d: any) => `${d.id} — ${d.name}`).join('\n');
-    const pick = prompt(`📦 انقل "${eName}" لقسم:\n${list}\n\nاكتب الـ id`);
-    if (pick) act('company/departments/assign', { employee_id: eId, department_id: pick.trim() }, '📦 اتغير قسمه');
+    setActionModal({
+      type: 'text', title: `📦 انقل «${eName}» لقسم`, placeholder: `اكتب الـ id:\n${list}`,
+      onSubmit: (pick) => { if (pick) act('company/departments/assign', { employee_id: eId, department_id: pick.trim() }, '📦 اتغير قسمه'); }
+    });
   };
   const removeDept = (eId: string, eName: string) => {
-    if (confirm(`🚫 شيل "${eName}" من قسمه؟`)) act('company/departments/remove', { employee_id: eId, department_id: '' }, '🚫 اتشال من القسم');
+    setActionModal({
+      type: 'confirm', title: `🚫 شيل «${eName}» من قسمه؟`, placeholder: '',
+      onSubmit: () => act('company/departments/remove', { employee_id: eId, department_id: '' }, '🚫 اتشال من القسم')
+    });
   };
   const resolveEvent = () => {
     if (!events?.active) return;
-    const out = prompt(`⚡ حل الحدث "${events.active.title}"؟\nاكتب النتيجة (resolved = نجاح، failed = فشل)`);
-    if (out) act('company/events/resolve', { outcome: out === 'failed' ? 'failed' : 'resolved' }, '⚡ الحدث اتحل');
+    setActionModal({
+      type: 'confirm', title: `⚡ حل الحدث «${events.active.title}»؟`, placeholder: '',
+      onSubmit: () => act('company/events/resolve', { outcome: 'resolved' }, '⚡ الحدث اتحل')
+    });
   };
   const resolveComp = () => {
     const comps = (state?.competitions || []);
     if (comps.length === 0) { setErr('مفيش تنافسات نشطة'); setTimeout(() => setErr(''), 3000); return; }
     const list = comps.filter((c: any) => c.status === 'active').map((c: any) => `${c.id} — ${c.task?.slice(0, 40)}`).join('\n');
-    const cid = prompt(`🏁 اختر تنافس للحل:\n${list}\n\nاكتب الـ id`);
-    if (!cid) return;
-    const emps = (state?.employees || []).filter((e: any) => e.status === 'active');
-    const winners = emps.map((e: any) => `${e.id} — ${e.name}`).join('\n');
-    const wid = prompt(`👑 اختر الفائز:\n${winners}\n\nاكتب الـ id`);
-    if (wid) act('company/compete/resolve', { competition_id: cid.trim(), winner_id: wid.trim() }, '🏁 التنافس اتقفل');
+    setActionModal({
+      type: 'text', title: '🏁 اختر تنافس للحل', placeholder: `اكتب الـ id:\n${list}`,
+      onSubmit: (cid) => {
+        if (!cid) return;
+        const emps = (state?.employees || []).filter((e: any) => e.status === 'active');
+        const winners = emps.map((e: any) => `${e.id} — ${e.name}`).join('\n');
+        const wid = window.prompt(`👑 اختر الفائز:\n${winners}\n\nاكتب الـ id`);
+        if (wid) act('company/compete/resolve', { competition_id: cid.trim(), winner_id: wid.trim() }, '🏁 التنافس اتقفل');
+      }
+    });
   };
   const sendOwnerTask = async () => {
     if (!ownerTask.trim()) { setErr('اكتب المهمة الأول يا ريس'); setTimeout(() => setErr(''), 3000); return; }
@@ -338,32 +385,59 @@ export default function CompanyPage() {
       <div className="grid cols-2">
         <div className="card">
           <div className="title">🏆 المتصدرون — اضغط للتحكم</div>
-          {lb.length === 0 ? <div className="loading">جارِ التحميل...</div> : lb.map((e, i) => (
-            <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '9px 4px', borderBottom: '1px solid rgba(35,48,82,.4)', fontSize: 13, flexWrap: 'wrap', gap: 6 }}>
-              <span style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }} onClick={() => openEmp(e.id)}>
-                <span style={{ fontWeight: 800, color: i < 3 ? 'var(--gold)' : 'var(--dim)', width: 18 }}>#{e.rank}</span>
-                <span>{e.icon}</span>
-                <b>{e.name}</b>
-                <span className="badge info">{e.rank_name}</span>
-                {e.probation && <span className="badge warn">🧪 اختبار</span>}
-                {e.warnings > 0 && <span className="badge err">⚠={e.warnings}</span>}
-              </span>
-              <span style={{ color: 'var(--dim)' }}>⚡{e.xp} · {e.success_rate}%</span>
-              <span style={{ display: 'flex', gap: 4 }}>
-                <button className="btn sm" title="تدريب" onClick={() => train(e.id, e.name)}>📚</button>
-                <button className="btn sm" title="XP" onClick={() => addXp(e.id, e.name)}>🎖️</button>
-                <button className="btn sm danger" title="رفد" onClick={() => fire(e.id, e.name)}>🚪</button>
-              </span>
-            </div>
-          ))}
+          {lb.length === 0 ? <div className="loading">جارِ التحميل...</div> : lb.map((e, i) => {
+            // حساب شريط XP النسبي
+            const maxXp = lb[0]?.xp || 1;
+            const xpPct = Math.min(100, Math.round((e.xp / maxXp) * 100));
+            return (
+              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '9px 4px', borderBottom: '1px solid rgba(35,48,82,.4)', fontSize: 13, flexWrap: 'wrap', gap: 6 }}>
+                <span style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }} onClick={() => openEmp(e.id)}>
+                  <span style={{ fontWeight: 800, color: i < 3 ? 'var(--gold)' : 'var(--dim)', width: 18 }}>#{e.rank}</span>
+                  <span>{e.icon}</span>
+                  <b>{e.name}</b>
+                  <span className="badge info">{e.rank_name}</span>
+                  {e.probation && <span className="badge warn">🧪 اختبار</span>}
+                  {e.warnings > 0 && <span className="badge err">⚠={e.warnings}</span>}
+                </span>
+                <span style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 130, flex: 1, maxWidth: 220 }}>
+                  <span style={{ fontSize: 11, color: 'var(--dim)', whiteSpace: 'nowrap' }}>⚡{e.xp}</span>
+                  <div style={{ flex: 1, height: 5, background: 'rgba(255,255,255,.07)', borderRadius: 4, overflow: 'hidden' }}>
+                    <div style={{ height: '100%', width: xpPct + '%', background: i < 3 ? 'linear-gradient(90deg,#ffd740,#ff9800)' : 'linear-gradient(90deg,#00e5ff,#2979ff)', borderRadius: 4 }} />
+                  </div>
+                </span>
+                <span style={{ display: 'flex', gap: 4 }}>
+                  <button className="btn sm" title={`تدريب ${e.name} — مهارة جديدة`} onClick={() => train(e.id, e.name)}>📚 تدريب</button>
+                  <button className="btn sm ghost" title={`XP يدوي لـ ${e.name}`} onClick={() => addXp(e.id, e.name)}>🎖️ XP</button>
+                  <button className="btn sm danger" title={`رفد ${e.name}`} onClick={() => fire(e.id, e.name)}>🚪</button>
+                </span>
+              </div>
+            );
+          })}
         </div>
 
         <div className="card">
-          <div className="title">🎪 سوق التوظيف</div>
+          <div className="title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span>🎪 سوق التوظيف</span>
+            <button className="btn sm ghost" onClick={refreshMarket} title="سوق جديد">🆕</button>
+          </div>
           {market.length === 0 ? <div className="loading">مفيش مرشحين — اعمل 🆕 سوق</div> : market.map((c, i) => (
             <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '9px 4px', borderBottom: '1px solid rgba(35,48,82,.4)', fontSize: 13, gap: 6, flexWrap: 'wrap' }}>
-              <span>{c.icon} <b>{c.name}</b> <span className="badge info">{c.role}</span> <span className="badge warn">{c.rank}</span></span>
-              <button className="btn sm" onClick={() => hire(c.id)}>🤝 وظّف</button>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                <span style={{ fontSize: 20 }}>{c.icon}</span>
+                <b>{c.name}</b>
+                <span className="badge info">{c.role}</span>
+                <span className="badge warn">{c.rank}</span>
+              </span>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                {c.skills && c.skills.length > 0 && (
+                  <span style={{ display: 'flex', gap: 4, flexWrap: 'wrap', maxWidth: 200 }}>
+                    {c.skills.slice(0, 3).map((s: any, j: number) => (
+                      <span key={j} className="badge" style={{ fontSize: 9.5 }}>{s.name || s}</span>
+                    ))}
+                  </span>
+                )}
+                <button className="btn sm" title={`توظيف ${c.name} — 300 XPC`} onClick={() => hire(c.id)}>🤝 وظّف (300)</button>
+              </span>
             </div>
           ))}
         </div>
@@ -802,6 +876,20 @@ export default function CompanyPage() {
       <h1>🏢 الشركة</h1>
       <p className="subtitle">مركز قيادة الشركة — إدارة كاملة من مكان واحد، بيانات live</p>
 
+      {/* مؤشر الاتصال الحي */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14, fontSize: 12, color: 'var(--dim)' }}>
+        <span style={{
+          width: 9, height: 9, borderRadius: '50%', display: 'inline-block',
+          background: 'linear-gradient(135deg, #00e676, #00e5ff)',
+          boxShadow: '0 0 10px rgba(0,230,118,0.6)',
+          animation: 'pulse-dot 2s infinite',
+        }} />
+        <span>متصل بالداشبورد · بيتحدث كل 10 ثواني</span>
+        <span style={{ marginInlineStart: 'auto', fontFamily: 'var(--font-mono)', fontSize: 11 }}>
+          {liveTime.toLocaleTimeString('ar-EG')}
+        </span>
+      </div>
+
       {msg && <div style={{ background: 'rgba(52,211,153,.12)', color: '#6ee7b7', border: '1px solid rgba(52,211,153,.3)', borderRadius: 10, padding: '10px 16px', marginBottom: 14, fontSize: 13 }}>{msg}</div>}
 
       {/* 🔥 شريط التقدم */}
@@ -963,6 +1051,84 @@ export default function CompanyPage() {
           </div>
         </div>
       )}
+
+      {/* ═══════ Action Modal — بدل prompt/confirm ═══════ */}
+      {actionModal && (
+        <ActionModal
+          title={actionModal.title}
+          placeholder={actionModal.placeholder}
+          confirmOnly={actionModal.type === 'confirm'}
+          onClose={() => setActionModal(null)}
+          onSubmit={(val) => {
+            setActionModal(null);
+            actionModal.onSubmit(val);
+          }}
+        />
+      )}
     </>
+  );
+}
+
+// ═══════ ActionModal — Modal احترافي للإدخال والتأكيد ═══════
+function ActionModal({ title, placeholder, confirmOnly, onClose, onSubmit }: {
+  title: string;
+  placeholder: string;
+  confirmOnly?: boolean;
+  onClose: () => void;
+  onSubmit: (val: string) => void;
+}) {
+  const [val, setVal] = useState('');
+  return (
+    <div
+      style={{
+        position: 'fixed', inset: 0, background: 'rgba(0,0,0,.7)', zIndex: 100,
+        display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16,
+        backdropFilter: 'blur(4px)', animation: 'fade-in 0.15s ease',
+      }}
+      onClick={onClose}
+    >
+      <div
+        className="card"
+        style={{
+          maxWidth: 440, width: '100%', animation: 'scale-in 0.2s var(--ease-spring)',
+          borderColor: 'rgba(99,102,241,.35)', boxShadow: '0 20px 60px rgba(0,0,0,.5)',
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+          <b style={{ fontSize: 15 }}>{title}</b>
+          <button className="btn sm ghost" onClick={onClose} title="إغلاق">✕</button>
+        </div>
+        {!confirmOnly ? (
+          <textarea
+            autoFocus
+            value={val}
+            onChange={(e) => setVal(e.target.value)}
+            placeholder={placeholder}
+            onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) onSubmit(val); }}
+            rows={placeholder.includes('\n') ? 6 : 3}
+            style={{
+              width: '100%', background: 'rgba(255,255,255,.05)', color: 'var(--text)',
+              border: '1px solid rgba(99,102,241,.3)', borderRadius: 10, padding: '10px 12px',
+              fontSize: 13, resize: 'vertical', fontFamily: 'inherit', outline: 'none',
+            }}
+          />
+        ) : (
+          <div style={{ fontSize: 13.5, color: 'var(--dim)', lineHeight: 1.8 }}>
+            متأكد من القرار ده؟ الإجراء ده بيأثر على بيانات الشركة.
+          </div>
+        )}
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
+          <button className="btn ghost" onClick={onClose}>إلغاء</button>
+          <button
+            className="btn"
+            style={{ background: confirmOnly ? 'linear-gradient(135deg,#ff5252,#d32f2f)' : 'linear-gradient(135deg,#00e5ff,#2979ff)', color: '#fff' }}
+            onClick={() => onSubmit(val)}
+          >
+            {confirmOnly ? '✅ تأكيد' : '✅ تنفيذ'}
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }

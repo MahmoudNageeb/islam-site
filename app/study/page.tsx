@@ -19,7 +19,7 @@ import SettingsView from '@/components/study/SettingsView';
 type Tab = 'home' | 'schedule' | 'pomodoro' | 'notes' | 'calendar' | 'rewards' | 'resources' | 'stats' | 'profile' | 'settings';
 
 const TABS: { id: Tab; icon: string; label: string }[] = [
-  { id: 'home', icon: '🏠', label: 'الرئيسية' },
+  { id: 'home', icon: '🎯', label: 'مهامي' },
   { id: 'schedule', icon: '📅', label: 'الجدول' },
   { id: 'pomodoro', icon: '🍅', label: 'بومودورو' },
   { id: 'notes', icon: '📝', label: 'ملاحظات' },
@@ -247,6 +247,7 @@ export default function StudyPage() {
           <HomeView
             tasks={tasks} points={points} level={level} streak={streak}
             sessionsCount={sessions.length} onNavigate={(t) => setTab(t as Tab)}
+            onUpdate={updateTask}
           />
         )}
         {tab === 'schedule' && (
@@ -365,7 +366,7 @@ function AiChat({ onClose, tasks, showToast }: { onClose: () => void; tasks: Tas
     setBusy(true);
     setMessages((prev) => [...prev, { role: 'ai', text: '...' }]);
     try {
-      const summary = `عندي ${tasks.length} مهمة، ${tasks.filter((t) => t.done).length} مكتملة. مهام اليوم: ${tasks.filter((t) => t.day === ['السبت', 'الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة'][(new Date().getDay() + 5) % 7]).slice(0, 5).map((t) => t.text).join('، ') || 'مفيش'}`;
+      const summary = `عندي ${tasks.length} مهمة، ${tasks.filter((t) => t.done).length} مكتملة. مهام اليوم: ${tasks.filter((t) => t.day === ['السبت', 'الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة'][(new Date().getDay() + 1) % 7]).slice(0, 5).map((t) => t.text).join('، ') || 'مفيش'}`;
       const res = await fetch('/study/api/ai', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ messages: [{ role: 'user', content: `${summary}\n\nسؤال محمود: ${text}` }] }),

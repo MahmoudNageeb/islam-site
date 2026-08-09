@@ -21,24 +21,41 @@ export default function ScheduleView({ tasks, onAdd, onUpdate, onDelete, showToa
   const [notesTask, setNotesTask] = useState<Task | null>(null);
   const [deleteTaskConfirm, setDeleteTaskConfirm] = useState<Task | null>(null);
   const [showCompleted, setShowCompleted] = useState(true);
-  const [filter, setFilter] = useState<'all' | 'high' | 'medium' | 'low'>('all');
+  const [filter, setFilter] = useState<'all' | 'today' | 'tomorrow' | 'week' | 'high' | 'medium' | 'low'>('all');
 
   // form state للإضافة
-  const [form, setForm] = useState({ day: DAYS[new Date().getDay() === 6 ? 0 : new Date().getDay() + 1], text: '', priority: 'medium' as Priority, notes: '', link: '' });
+  const [form, setForm] = useState({ day: DAYS[0], text: '', priority: 'medium' as Priority, notes: '', link: '' });
   // form state للتعديل
   const [editForm, setEditForm] = useState({ day: '', text: '', priority: 'medium' as Priority, notes: '', link: '' });
 
-  const todayIdx = new Date().getDay(); // 0=Sunday
-  const todayName = DAYS[(todayIdx + 5) % 7]; // تحويل: 0(الأحد)→السبت index 0؟ لا — نستخدم مباشرة
+  const todayIdx = new Date().getDay(); // JS: 0=Sunday
+  const todayName = DAYS[(todayIdx + 1) % 7]; // تحويل: السبت index 0
+  const tomorrowName = DAYS[(todayIdx + 2) % 7];
 
   const visibleTasks = tasks.filter((t) => {
     if (!showCompleted && t.done) return false;
-    if (filter !== 'all' && t.priority !== filter) return false;
+    if (filter === 'high' || filter === 'medium' || filter === 'low') {
+      if (t.priority !== filter) return false;
+    }
+    if (filter === 'today' && t.day !== todayName) return false;
+    if (filter === 'tomorrow' && t.day !== tomorrowName) return false;
+    if (filter === 'week') {
+      // الأسبوع: من النهاردة لبعد 6 أيام
+      const dayIdx = DAYS.indexOf(t.day);
+      const weekEnd = (todayIdx + 1 + 6) % 7;
+      let inWeek = false;
+      let i = (todayIdx + 1) % 7;
+      for (let c = 0; c < 7; c++) {
+        if (i === dayIdx) { inWeek = true; break; }
+        i = (i + 1) % 7;
+      }
+      if (!inWeek) return false;
+    }
     return true;
   });
 
   const openAdd = (day?: string) => {
-    setForm({ day: day || DAYS[0], text: '', priority: 'medium', notes: '', link: '' });
+    setForm({ day: day || todayName || DAYS[0], text: '', priority: 'medium', notes: '', link: '' });
     setAddOpen(true);
   };
 
@@ -73,13 +90,22 @@ export default function ScheduleView({ tasks, onAdd, onUpdate, onDelete, showToa
     pct: visibleTasks.length ? Math.round((visibleTasks.filter((t) => t.done).length / visibleTasks.length) * 100) : 0,
   };
 
+  // أيام العرض حسب الفلتر
+  const visibleDays = filter === 'today' ? [todayName]
+    : filter === 'tomorrow' ? [tomorrowName]
+    : filter === 'week' ? Array.from({ length: 7 }, (_, i) => DAYS[(DAYS.indexOf(todayName) + i) % 7])
+    : DAYS;
+
   return (
     <div>
       {/* شريط الأدوات */}
       <div className="row spread" style={{ marginBottom: 14, flexWrap: 'wrap', gap: 10 }}>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <button className="btn" onClick={() => openAdd()}>➕ مهمة جديدة</button>
-          <button className={`btn sm ${filter === 'all' ? '' : 'ghost'}`} onClick={() => setFilter('all')}>الكل</button>
+          <button className={`btn sm ${filter === 'all' ? '' : 'ghost'}`} onClick={() => setFilter('all')}>📋 الكل</button>
+          <button className={`btn sm ${filter === 'today' ? '' : 'ghost'}`} onClick={() => setFilter('today')}>📅 النهاردة</button>
+          <button className={`btn sm ${filter === 'tomorrow' ? '' : 'ghost'}`} onClick={() => setFilter('tomorrow')}>⏭️ بكرة</button>
+          <button className={`btn sm ${filter === 'week' ? '' : 'ghost'}`} onClick={() => setFilter('week')}>🗓️ الأسبوع</button>
           <button className={`btn sm ${filter === 'high' ? '' : 'ghost'}`} onClick={() => setFilter('high')}>🔴 عالية</button>
           <button className={`btn sm ${filter === 'medium' ? '' : 'ghost'}`} onClick={() => setFilter('medium')}>🟡 متوسطة</button>
           <button className={`btn sm ${filter === 'low' ? '' : 'ghost'}`} onClick={() => setFilter('low')}>🔵 منخفضة</button>
@@ -107,7 +133,7 @@ export default function ScheduleView({ tasks, onAdd, onUpdate, onDelete, showToa
 
       {/* أيام الأسبوع */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-        {DAYS.map((day) => {
+        {visibleDays.map((day) => {
           const dayTasks = visibleTasks.filter((t) => t.day === day);
           const doneCount = dayTasks.filter((t) => t.done).length;
           const dayPct = dayTasks.length ? Math.round((doneCount / dayTasks.length) * 100) : 0;
@@ -138,8 +164,9 @@ export default function ScheduleView({ tasks, onAdd, onUpdate, onDelete, showToa
               )}
 
               {dayTasks.length === 0 ? (
-                <div style={{ fontSize: 12, color: 'var(--dim-2)', padding: '6px 0' }}>
-                  مفيش مهام — ضيف مهمة بالزر ➕
+                <div style={{ fontSize: 12, color: 'var(--dim-2)', padding: '8px 0', display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span>مفيش مهام {filter === 'today' ? 'النهاردة' : filter === 'tomorrow' ? 'بكرة' : ''} — ضيف مهمة بالزر ➕</span>
+                  <button className="btn sm ghost" style={{ padding: '3px 10px', fontSize: 11.5 }} onClick={() => openAdd(day)}>➕ ضيف</button>
                 </div>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
