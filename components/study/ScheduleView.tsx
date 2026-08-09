@@ -22,6 +22,7 @@ export default function ScheduleView({ tasks, onAdd, onUpdate, onDelete, showToa
   const [deleteTaskConfirm, setDeleteTaskConfirm] = useState<Task | null>(null);
   const [showCompleted, setShowCompleted] = useState(true);
   const [filter, setFilter] = useState<'all' | 'today' | 'tomorrow' | 'week' | 'high' | 'medium' | 'low'>('all');
+  const [search, setSearch] = useState('');
 
   // form state للإضافة
   const [form, setForm] = useState({ day: DAYS[0], text: '', priority: 'medium' as Priority, notes: '', link: '' });
@@ -42,7 +43,6 @@ export default function ScheduleView({ tasks, onAdd, onUpdate, onDelete, showToa
     if (filter === 'week') {
       // الأسبوع: من النهاردة لبعد 6 أيام
       const dayIdx = DAYS.indexOf(t.day);
-      const weekEnd = (todayIdx + 1 + 6) % 7;
       let inWeek = false;
       let i = (todayIdx + 1) % 7;
       for (let c = 0; c < 7; c++) {
@@ -50,6 +50,13 @@ export default function ScheduleView({ tasks, onAdd, onUpdate, onDelete, showToa
         i = (i + 1) % 7;
       }
       if (!inWeek) return false;
+    }
+    // البحث الفوري
+    if (search.trim()) {
+      const q = search.trim().toLowerCase();
+      const inText = t.text.toLowerCase().includes(q);
+      const inNotes = (t.notes || '').toLowerCase().includes(q);
+      if (!inText && !inNotes) return false;
     }
     return true;
   });
@@ -98,6 +105,31 @@ export default function ScheduleView({ tasks, onAdd, onUpdate, onDelete, showToa
 
   return (
     <div>
+      {/* البحث الفوري */}
+      <div style={{ position: 'relative', marginBottom: 12 }}>
+        <span style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', fontSize: 14, opacity: 0.6 }}>🔍</span>
+        <input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="ابحث في المهام..."
+          style={{
+            width: '100%', padding: '11px 38px', borderRadius: 10,
+            background: 'var(--bg-soft)', border: '1px solid var(--border)',
+            color: 'var(--text)', fontSize: 13, outline: 'none', fontFamily: 'inherit',
+            transition: 'border-color 0.15s',
+          }}
+        />
+        {search && (
+          <button
+            onClick={() => setSearch('')}
+            style={{
+              position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)',
+              background: 'none', border: 'none', color: 'var(--dim)', cursor: 'pointer', fontSize: 13,
+            }}
+          >✕</button>
+        )}
+      </div>
+
       {/* شريط الأدوات */}
       <div className="row spread" style={{ marginBottom: 14, flexWrap: 'wrap', gap: 10 }}>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>

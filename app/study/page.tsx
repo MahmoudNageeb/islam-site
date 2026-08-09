@@ -1,34 +1,28 @@
 'use client';
 
-// ═══════════ 📚 مهامي — نظام المذاكرة الذكي (v6 JARVIS) ═══════════
-// 10 أقسام: الرئيسية / الجدول / بومودورو / ملاحظات / تقويم / مكافآت / روابط / إحصائيات / بروفايل / إعدادات
+// ═══════════ 📚 مهامي v8 — إعادة البناء الكاملة ═══════════
+// 6 تبويبات ذكية: مهامي / الجدول / التركيز / الملاحظات / التقدم / الإعدادات
+// Mobile-first + bottom nav + زر عائم + skeleton loaders
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Link, Note, Priority, Rewards, SessionRow, Settings, Task } from '@/components/study/types';
 import HomeView from '@/components/study/HomeView';
 import ScheduleView from '@/components/study/ScheduleView';
 import PomodoroView from '@/components/study/PomodoroView';
-import NotesView from '@/components/study/NotesView';
-import CalendarView from '@/components/study/CalendarView';
-import RewardsView from '@/components/study/RewardsView';
-import ResourcesView from '@/components/study/ResourcesView';
-import StatsView from '@/components/study/StatsView';
-import ProfileView from '@/components/study/ProfileView';
-import SettingsView from '@/components/study/SettingsView';
+import NotesHub from '@/components/study/NotesHub';
+import ProgressHub from '@/components/study/ProgressHub';
+import SettingsHub from '@/components/study/SettingsHub';
+import { DAYS } from '@/components/study/types';
 
-type Tab = 'home' | 'schedule' | 'pomodoro' | 'notes' | 'calendar' | 'rewards' | 'resources' | 'stats' | 'profile' | 'settings';
+type Tab = 'home' | 'schedule' | 'focus' | 'notes' | 'progress' | 'settings';
 
-const TABS: { id: Tab; icon: string; label: string }[] = [
-  { id: 'home', icon: '🎯', label: 'مهامي' },
-  { id: 'schedule', icon: '📅', label: 'الجدول' },
-  { id: 'pomodoro', icon: '🍅', label: 'بومودورو' },
-  { id: 'notes', icon: '📝', label: 'ملاحظات' },
-  { id: 'calendar', icon: '🗓️', label: 'تقويم' },
-  { id: 'rewards', icon: '🏆', label: 'مكافآت' },
-  { id: 'resources', icon: '🔗', label: 'روابط' },
-  { id: 'stats', icon: '📊', label: 'إحصائيات' },
-  { id: 'profile', icon: '👤', label: 'بروفايل' },
-  { id: 'settings', icon: '⚙️', label: 'إعدادات' },
+const TABS: { id: Tab; icon: string; label: string; short: string }[] = [
+  { id: 'home', icon: '🎯', label: 'مهامي', short: 'مهامي' },
+  { id: 'schedule', icon: '📅', label: 'الجدول', short: 'جدول' },
+  { id: 'focus', icon: '🍅', label: 'التركيز', short: 'تركيز' },
+  { id: 'notes', icon: '📝', label: 'الملاحظات', short: 'ملاحظات' },
+  { id: 'progress', icon: '📊', label: 'التقدم', short: 'تقدم' },
+  { id: 'settings', icon: '⚙️', label: 'الإعدادات', short: 'إعدادات' },
 ];
 
 export default function StudyPage() {
@@ -42,6 +36,10 @@ export default function StudyPage() {
   const [loading, setLoading] = useState(true);
   const [toasts, setToasts] = useState<{ id: number; msg: string; type: string }[]>([]);
   const [aiOpen, setAiOpen] = useState(false);
+  const [quickAddOpen, setQuickAddOpen] = useState(false);
+  const [quickText, setQuickText] = useState('');
+  const [quickDay, setQuickDay] = useState('');
+  const [quickPriority, setQuickPriority] = useState<Priority>('medium');
 
   const showToast = useCallback((msg: string, type: 'success' | 'error' | 'info' = 'info') => {
     const id = Date.now() + Math.random();
@@ -84,7 +82,6 @@ export default function StudyPage() {
     if (!res.ok) { showToast(data.error || 'فشل الإضافة', 'error'); return; }
     setTasks((prev) => [...prev, data.task]);
     showToast('تمت إضافة المهمة ✅', 'success');
-    // نقاط إضافة
     try { await fetch('/study/api/points', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ amount: 5, reason: 'إضافة مهمة' }) }); loadAll(); } catch {}
   };
 
@@ -96,7 +93,6 @@ export default function StudyPage() {
     const data = await res.json();
     if (!res.ok) { showToast(data.error || 'فشل التعديل', 'error'); return; }
     setTasks((prev) => prev.map((t) => (t.id === id ? data.task : t)));
-    // لو اكتملت → نقاط
     if (patch.done === 1) {
       const pts = patch.priority === 'high' ? 30 : patch.priority === 'medium' ? 20 : 10;
       try { await fetch('/study/api/points', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ amount: pts, reason: 'إكمال مهمة' }) }); loadAll(); } catch {}
@@ -173,7 +169,6 @@ export default function StudyPage() {
 
   const onImport = async (data: { tasks: Task[]; notes: Note[]; links: Link[] }) => {
     try {
-      // استيراد المهام
       for (const t of data.tasks || []) {
         await fetch('/study/api/tasks', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ day: t.day, text: t.text, priority: t.priority, notes: t.notes, link: t.link }) });
       }
@@ -202,23 +197,23 @@ export default function StudyPage() {
     }
   };
 
-  if (loading) {
-    return (
-      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '60vh' }}>
-        <div className="spinner" />
-      </div>
-    );
-  }
+  // ─── الإضافة السريعة ───
+  const submitQuick = async () => {
+    if (!quickText.trim()) return;
+    const day = quickDay || DAYS[(new Date().getDay() + 1) % 7];
+    await addTask({ day, text: quickText.trim(), priority: quickPriority });
+    setQuickText('');
+    setQuickAddOpen(false);
+  };
 
   const points = rewards?.points ?? 0;
   const level = Math.floor(points / 100) + 1;
   const streak = rewards?.streak_days ?? 0;
-  const completedTasksCount = tasks.filter((t) => t.done).length;
-  const studyDays = new Set(sessions.map((s) => s.date)).size;
+  const todayName = DAYS[(new Date().getDay() + 1) % 7];
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      {/* التبويبات */}
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16, paddingBottom: 80 }}>
+      {/* شريط تبويبات — ديسكتوب */}
       <div className="study-tabs" style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 4, flexWrap: 'wrap' }}>
         {TABS.map((t) => (
           <button
@@ -243,72 +238,158 @@ export default function StudyPage() {
 
       {/* المحتوى */}
       <div className="anim-fade" key={tab}>
-        {tab === 'home' && (
-          <HomeView
-            tasks={tasks} points={points} level={level} streak={streak}
-            sessionsCount={sessions.length} onNavigate={(t) => setTab(t as Tab)}
-            onUpdate={updateTask}
-          />
-        )}
-        {tab === 'schedule' && (
-          <ScheduleView tasks={tasks} onAdd={addTask} onUpdate={updateTask} onDelete={deleteTask} showToast={showToast} />
-        )}
-        {tab === 'pomodoro' && (
-          <PomodoroView
-            workTime={parseInt(settings.work_time) || 25}
-            breakTime={parseInt(settings.break_time) || 5}
-            longBreakTime={parseInt(settings.long_break_time) || 15}
-            sessionsCount={sessions.length}
-            onSessionComplete={onSessionComplete}
-            onSaveSettings={saveSetting}
-          />
-        )}
-        {tab === 'notes' && (
-          <NotesView notes={notes} onAdd={addNote} onUpdate={updateNote} onDelete={deleteNote} showToast={showToast} />
-        )}
-        {tab === 'calendar' && <CalendarView tasks={tasks} />}
-        {tab === 'rewards' && (
-          <RewardsView
-            points={points} completedTasksCount={completedTasksCount}
-            streak={streak} sessionsCount={sessions.length}
-            notes={notes} links={links} studyDays={studyDays}
-          />
-        )}
-        {tab === 'resources' && (
-          <ResourcesView links={links} onAdd={addLink} onDelete={deleteLink} showToast={showToast} />
-        )}
-        {tab === 'stats' && <StatsView tasks={tasks} sessions={sessions} streak={streak} />}
-        {tab === 'profile' && (
-          <ProfileView tasks={tasks} notes={notes} links={links} sessions={sessions} points={points} streak={streak} />
-        )}
-        {tab === 'settings' && (
-          <SettingsView
-            workTime={parseInt(settings.work_time) || 25}
-            breakTime={parseInt(settings.break_time) || 5}
-            longBreakTime={parseInt(settings.long_break_time) || 15}
-            tasks={tasks} notes={notes} links={links} sessions={sessions}
-            onSaveSetting={saveSetting} onImport={onImport} onClearAll={onClearAll} showToast={showToast}
-          />
+        {loading ? (
+          <PageSkeleton />
+        ) : (
+          <>
+            {tab === 'home' && (
+              <HomeView
+                tasks={tasks} points={points} level={level} streak={streak}
+                sessionsCount={sessions.length} onNavigate={(t) => setTab(t as Tab)}
+                onUpdate={updateTask}
+              />
+            )}
+            {tab === 'schedule' && (
+              <ScheduleView tasks={tasks} onAdd={addTask} onUpdate={updateTask} onDelete={deleteTask} showToast={showToast} />
+            )}
+            {tab === 'focus' && (
+              <PomodoroView
+                workTime={parseInt(settings.work_time) || 25}
+                breakTime={parseInt(settings.break_time) || 5}
+                longBreakTime={parseInt(settings.long_break_time) || 15}
+                sessionsCount={sessions.length}
+                onSessionComplete={onSessionComplete}
+                onSaveSettings={saveSetting}
+              />
+            )}
+            {tab === 'notes' && (
+              <NotesHub
+                notes={notes} links={links}
+                onAddNote={addNote} onUpdateNote={updateNote} onDeleteNote={deleteNote}
+                onAddLink={addLink} onDeleteLink={deleteLink}
+                showToast={showToast}
+              />
+            )}
+            {tab === 'progress' && (
+              <ProgressHub
+                tasks={tasks} sessions={sessions} streak={streak}
+                points={points} completedTasksCount={tasks.filter((t) => t.done).length}
+                notes={notes} links={links}
+                studyDays={new Set(sessions.map((s) => s.date)).size}
+              />
+            )}
+            {tab === 'settings' && (
+              <SettingsHub
+                workTime={parseInt(settings.work_time) || 25}
+                breakTime={parseInt(settings.break_time) || 5}
+                longBreakTime={parseInt(settings.long_break_time) || 15}
+                tasks={tasks} notes={notes} links={links} sessions={sessions}
+                points={points} streak={streak}
+                onSaveSetting={saveSetting} onImport={onImport} onClearAll={onClearAll} showToast={showToast}
+              />
+            )}
+          </>
         )}
       </div>
 
-      {/* زر الـ AI */}
+      {/* زر الـ AI — فاب */}
       <button
         className="ai-fab"
         onClick={() => setAiOpen(!aiOpen)}
         title="إسلام — مساعد المذاكرة"
         style={{
-          position: 'fixed', bottom: 24, left: 24, zIndex: 250,
-          width: 54, height: 54, borderRadius: '50%', border: 'none', cursor: 'pointer',
+          position: 'fixed', bottom: 84, left: 20, zIndex: 250,
+          width: 50, height: 50, borderRadius: '50%', border: 'none', cursor: 'pointer',
           background: 'linear-gradient(135deg, #00e5ff, #2979ff)', color: '#fff',
-          fontSize: 24, boxShadow: '0 4px 24px rgba(0,229,255,0.4)',
+          fontSize: 22, boxShadow: '0 4px 24px rgba(0,229,255,0.4)',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           transition: 'transform 0.15s',
         }}
       >🤖</button>
 
+      {/* زر الإضافة السريعة — فاب */}
+      <button
+        onClick={() => setQuickAddOpen(true)}
+        title="إضافة مهمة سريعة"
+        style={{
+          position: 'fixed', bottom: 84, right: 20, zIndex: 250,
+          width: 50, height: 50, borderRadius: '50%', border: 'none', cursor: 'pointer',
+          background: 'linear-gradient(135deg, #00e676, #009688)', color: '#fff',
+          fontSize: 24, boxShadow: '0 4px 24px rgba(0,230,118,0.4)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          transition: 'transform 0.15s',
+        }}
+      >➕</button>
+
       {/* شات الـ AI */}
       {aiOpen && <AiChat onClose={() => setAiOpen(false)} tasks={tasks} showToast={showToast} />}
+
+      {/* ─── Quick Add Modal ─── */}
+      {quickAddOpen && (
+        <div
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.7)', zIndex: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, backdropFilter: 'blur(4px)' }}
+          onClick={() => setQuickAddOpen(false)}
+        >
+          <div
+            className="card"
+            style={{ maxWidth: 420, width: '100%', animation: 'scale-in 0.2s var(--ease-spring)', borderColor: 'rgba(0,229,255,.3)' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+              <b style={{ fontSize: 15 }}>➕ إضافة مهمة سريعة</b>
+              <button className="btn sm ghost" onClick={() => setQuickAddOpen(false)}>✕</button>
+            </div>
+            <textarea
+              autoFocus
+              value={quickText}
+              onChange={(e) => setQuickText(e.target.value)}
+              placeholder="اكتب المهمة... مثال: مراجعة الفيزياء — قوانين نيوتن"
+              onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) submitQuick(); }}
+              rows={2}
+              style={{
+                width: '100%', background: 'rgba(255,255,255,.05)', color: 'var(--text)',
+                border: '1px solid rgba(99,102,241,.3)', borderRadius: 10, padding: '10px 12px',
+                fontSize: 13, resize: 'vertical', fontFamily: 'inherit', outline: 'none',
+              }}
+            />
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 10 }}>
+              <div>
+                <label style={{ fontSize: 11.5, color: 'var(--dim)', display: 'block', marginBottom: 4 }}>اليوم</label>
+                <select
+                  value={quickDay}
+                  onChange={(e) => setQuickDay(e.target.value)}
+                  style={{
+                    width: '100%', background: 'rgba(255,255,255,.05)', color: 'var(--text)',
+                    border: '1px solid rgba(99,102,241,.3)', borderRadius: 8, padding: '8px 10px', fontSize: 12.5, fontFamily: 'inherit',
+                  }}
+                >
+                  <option value="">النهاردة ({todayName})</option>
+                  {DAYS.map((d) => <option key={d} value={d}>{d}</option>)}
+                </select>
+              </div>
+              <div>
+                <label style={{ fontSize: 11.5, color: 'var(--dim)', display: 'block', marginBottom: 4 }}>الأولوية</label>
+                <select
+                  value={quickPriority}
+                  onChange={(e) => setQuickPriority(e.target.value as Priority)}
+                  style={{
+                    width: '100%', background: 'rgba(255,255,255,.05)', color: 'var(--text)',
+                    border: '1px solid rgba(99,102,241,.3)', borderRadius: 8, padding: '8px 10px', fontSize: 12.5, fontFamily: 'inherit',
+                  }}
+                >
+                  <option value="high">🔴 عالية</option>
+                  <option value="medium">🟡 متوسطة</option>
+                  <option value="low">🔵 منخفضة</option>
+                </select>
+              </div>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 14 }}>
+              <button className="btn ghost" onClick={() => setQuickAddOpen(false)}>إلغاء</button>
+              <button className="btn" onClick={submitQuick} disabled={!quickText.trim()}>✅ إضافة</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* الـ Toasts */}
       <div style={{ position: 'fixed', top: 70, right: 16, zIndex: 400, display: 'flex', flexDirection: 'column', gap: 8, maxWidth: 320 }}>
@@ -327,6 +408,67 @@ export default function StudyPage() {
           </div>
         ))}
       </div>
+
+      {/* Bottom Nav — موبايل */}
+      <div
+        style={{
+          position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 200,
+          display: 'flex', justifyContent: 'space-around', alignItems: 'center',
+          background: 'rgba(10,14,28,0.92)', backdropFilter: 'blur(14px)',
+          borderTop: '1px solid rgba(0,229,255,0.15)',
+          padding: '8px 4px calc(8px + env(safe-area-inset-bottom))',
+          boxShadow: '0 -8px 30px rgba(0,0,0,0.4)',
+        }}
+      >
+        {TABS.map((t) => (
+          <button
+            key={t.id}
+            onClick={() => setTab(t.id)}
+            style={{
+              display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2,
+              background: 'transparent', border: 'none', cursor: 'pointer', fontFamily: 'inherit',
+              padding: '4px 10px', borderRadius: 10,
+              color: tab === t.id ? '#00e5ff' : 'var(--dim)',
+              transition: 'all 0.15s',
+            }}
+          >
+            <span style={{ fontSize: 19, filter: tab === t.id ? 'drop-shadow(0 0 6px rgba(0,229,255,0.6))' : 'none' }}>{t.icon}</span>
+            <span style={{ fontSize: 9.5, fontWeight: 700 }}>{t.short}</span>
+            {tab === t.id && <span style={{ width: 18, height: 2, background: '#00e5ff', borderRadius: 2, marginTop: 1 }} />}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ═══════════ PageSkeleton — تحميل أنيق ═══════════
+function PageSkeleton() {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <div className="card" style={{ height: 60 }}>
+        <div className="skeleton" style={{ width: '40%', height: 14 }} />
+        <div className="skeleton" style={{ width: '25%', height: 11, marginTop: 10 }} />
+      </div>
+      <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))' }}>
+        {[0, 1, 2, 3].map((i) => (
+          <div key={i} className="card" style={{ height: 80 }}>
+            <div className="skeleton" style={{ width: '50%', height: 14 }} />
+            <div className="skeleton" style={{ width: '70%', height: 22, marginTop: 12 }} />
+          </div>
+        ))}
+      </div>
+      <div className="card" style={{ height: 160 }}>
+        <div className="skeleton" style={{ width: '35%', height: 14 }} />
+        {[0, 1, 2].map((i) => (
+          <div key={i} className="skeleton" style={{ width: i === 1 ? '85%' : '92%', height: 36, marginTop: 14 }} />
+        ))}
+      </div>
+      <div className="card" style={{ height: 120 }}>
+        <div className="skeleton" style={{ width: '30%', height: 14 }} />
+        <div className="skeleton" style={{ width: '88%', height: 40, marginTop: 14 }} />
+        <div className="skeleton" style={{ width: '75%', height: 40, marginTop: 10 }} />
+      </div>
     </div>
   );
 }
@@ -343,7 +485,6 @@ function AiChat({ onClose, tasks, showToast }: { onClose: () => void; tasks: Tas
 
   useEffect(() => { boxRef.current?.scrollTo({ top: boxRef.current.scrollHeight, behavior: 'smooth' }); }, [messages]);
 
-  // Typewriter effect
   useEffect(() => {
     const lastAi = messages.map((m, i) => ({ m, i })).filter((x) => x.m.role === 'ai').pop();
     if (!lastAi) return;
@@ -366,7 +507,7 @@ function AiChat({ onClose, tasks, showToast }: { onClose: () => void; tasks: Tas
     setBusy(true);
     setMessages((prev) => [...prev, { role: 'ai', text: '...' }]);
     try {
-      const summary = `عندي ${tasks.length} مهمة، ${tasks.filter((t) => t.done).length} مكتملة. مهام اليوم: ${tasks.filter((t) => t.day === ['السبت', 'الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة'][(new Date().getDay() + 1) % 7]).slice(0, 5).map((t) => t.text).join('، ') || 'مفيش'}`;
+      const summary = `عندي ${tasks.length} مهمة، ${tasks.filter((t) => t.done).length} مكتملة. مهام اليوم: ${tasks.filter((t) => t.day === DAYS[(new Date().getDay() + 1) % 7]).slice(0, 5).map((t) => t.text).join('، ') || 'مفيش'}`;
       const res = await fetch('/study/api/ai', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ messages: [{ role: 'user', content: `${summary}\n\nسؤال محمود: ${text}` }] }),
@@ -383,14 +524,13 @@ function AiChat({ onClose, tasks, showToast }: { onClose: () => void; tasks: Tas
 
   return (
     <div style={{
-      position: 'fixed', bottom: 88, left: 24, zIndex: 260,
+      position: 'fixed', bottom: 150, left: 20, zIndex: 260,
       width: 'min(360px, calc(100vw - 32px))', maxHeight: '60vh',
       display: 'flex', flexDirection: 'column',
       background: 'var(--bg-card-solid)', border: '1px solid var(--border-strong)',
       borderRadius: 16, boxShadow: '0 12px 48px rgba(0,0,0,0.5), 0 0 40px rgba(0,229,255,0.06)',
       overflow: 'hidden', animation: 'scale-in 0.2s var(--ease-spring)',
     }}>
-      {/* الهيدر */}
       <div style={{
         padding: '12px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
         background: 'linear-gradient(135deg, #00b8d4, #2979ff)', color: '#fff',
@@ -398,7 +538,6 @@ function AiChat({ onClose, tasks, showToast }: { onClose: () => void; tasks: Tas
         <b style={{ fontSize: 13.5 }}>🤖 إسلام — مساعد المذاكرة</b>
         <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#fff', cursor: 'pointer', fontSize: 16 }}>✕</button>
       </div>
-      {/* الرسايل */}
       <div ref={boxRef} style={{ flex: 1, overflowY: 'auto', padding: 12, display: 'flex', flexDirection: 'column', gap: 8, maxHeight: '38vh' }}>
         {messages.map((m, i) => (
           <div key={i} style={{
@@ -416,7 +555,6 @@ function AiChat({ onClose, tasks, showToast }: { onClose: () => void; tasks: Tas
           </div>
         ))}
       </div>
-      {/* الإدخال */}
       <div style={{ padding: 10, borderTop: '1px solid var(--border)', display: 'flex', gap: 8 }}>
         <input
           value={input}
