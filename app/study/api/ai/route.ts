@@ -71,11 +71,11 @@ const PROVIDERS = [
 
 // بناء سياق مذاكرة محمود
 async function buildContext() {
-  const tasks = await await getTasks();
-  const goals = await await getGoals();
-  const projects = await await getProjects();
-  const habits = await await getHabits();
-  const analytics = await await getAnalytics();
+  const tasks = await getTasks();
+  const goals = await getGoals();
+  const projects = await getProjects();
+  const habits = await getHabits();
+  const analytics = await getAnalytics();
 
   const today = new Date().toLocaleDateString('ar-EG', { weekday: 'long' });
 
@@ -125,7 +125,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'message مطلوب' }, { status: 400 });
     }
 
-    const system = buildContext();
+    const system = await buildContext();
     let reply = '';
     let lastErr = '';
     let usedProvider = '';
