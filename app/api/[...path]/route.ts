@@ -15,22 +15,20 @@ async function getDashUrl(): Promise<string> {
   if (!process.env.COMPANY_DASH_URL || process.env.NODE_ENV === 'development') {
     return DASH;
   }
-  // على Vercel — جرب اللينك الحي كل 60 ثانية
-  const now = Date.now();
-  if (now - lastFetch > 60000) {
+  // على Vercel — جرب DASH_URL_ENDPOINT (بيقرا اللينك الحي من السيرفر)
+  const endpoint = process.env.DASH_URL_ENDPOINT || '';
+  if (endpoint) {
     try {
-      const self = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : '';
-      const res = await fetch(`${self}/api/dash-url`, { cache: 'no-store', signal: AbortSignal.timeout(5000) });
+      const res = await fetch(endpoint, { cache: 'no-store', signal: AbortSignal.timeout(8000) });
       const json = await res.json();
       if (json.url && json.url.startsWith('http')) {
-        cachedDash = json.url;
-        lastFetch = now;
+        return json.url;
       }
     } catch {
       // استخدم الـ env var
     }
   }
-  return cachedDash;
+  return DASH;
 }
 
 export async function GET(request: NextRequest, context: any) {
