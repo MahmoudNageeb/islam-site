@@ -320,7 +320,27 @@ a:hover { color: var(--secondary-light); }
 
 @keyframes pulse-dot {
   0%, 100% { opacity: 1; transform: scale(1); }
-  50% { opacity: 0.55; transform: scale(0.85); }
+  50% { opacity: 0.5; transform: scale(1.35); }
+}
+
+/* خطوط البيانات المتحركة في طوبولوجيا الشركة */
+@keyframes flow-down {
+  0%   { transform: translateY(-20px); opacity: 0; }
+  30%  { opacity: 1; }
+  100% { transform: translateY(40px); opacity: 0; }
+}
+
+/* وضع العرض الكامل (Kiosk) — بيخفي الـ sidebar والـ topbar */
+.kiosk-mode aside,
+.kiosk-mode .sidebar,
+.kiosk-mode nav {
+  display: none !important;
+}
+.kiosk-mode .layout-main,
+.kiosk-mode main {
+  margin-inline-start: 0 !important;
+  padding: 12px !important;
+  width: 100% !important;
 }
 
 /* ═══════════ TopBar ═══════════ */
