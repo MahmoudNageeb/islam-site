@@ -5,12 +5,22 @@ import { NextResponse } from 'next/server';
 // محلياً: بيقرا الملف مباشرة
 
 const DASH = process.env.COMPANY_DASH_URL || '';
+const DASH_ENDPOINT = process.env.DASH_URL_ENDPOINT || '';
 
 export async function GET() {
   // لو في COMPANY_DASH_URL → نستخدم الداشبورد (Vercel)
   if (DASH) {
     try {
-      const res = await fetch(`${DASH}/api/guardian`, { cache: 'no-store', signal: AbortSignal.timeout(10000) });
+      // جرب اللينك الحي الأول
+      let dash = DASH;
+      if (DASH_ENDPOINT) {
+        try {
+          const r = await fetch(DASH_ENDPOINT, { cache: 'no-store', signal: AbortSignal.timeout(8000) });
+          const j = await r.json();
+          if (j.url && j.url.startsWith('http')) dash = j.url;
+        } catch {}
+      }
+      const res = await fetch(`${dash}/api/guardian`, { cache: 'no-store', signal: AbortSignal.timeout(10000) });
       const json = await res.json();
       if (json.success && json.data) {
         return NextResponse.json({ data: json.data });
