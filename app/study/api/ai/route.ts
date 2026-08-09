@@ -64,7 +64,7 @@ const PROVIDERS = [
     name: 'OpenRouter',
     base: 'https://openrouter.ai/api/v1',
     keyEnv: 'OPENROUTER_API_KEY',
-    models: ['openrouter/free', 'nvidia/nemotron-3-ultra-550b-a55b:free'],
+    models: ['nvidia/nemotron-3-ultra-550b-a55b:free', 'deepseek/deepseek-chat-v3-0324:free'],
     enabled: true,
   },
 ];
