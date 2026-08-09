@@ -97,11 +97,14 @@ export default function ScheduleView({ tasks, onAdd, onUpdate, onDelete, showToa
     pct: visibleTasks.length ? Math.round((visibleTasks.filter((t) => t.done).length / visibleTasks.length) * 100) : 0,
   };
 
-  // أيام العرض حسب الفلتر
-  const visibleDays = filter === 'today' ? [todayName]
+  // أيام العرض حسب الفلتر — أثناء البحث: بس الأيام اللي فيها نتايج
+  let visibleDays = filter === 'today' ? [todayName]
     : filter === 'tomorrow' ? [tomorrowName]
     : filter === 'week' ? Array.from({ length: 7 }, (_, i) => DAYS[(DAYS.indexOf(todayName) + i) % 7])
     : DAYS;
+  if (search.trim()) {
+    visibleDays = visibleDays.filter((d) => visibleTasks.some((t) => t.day === d));
+  }
 
   return (
     <div>

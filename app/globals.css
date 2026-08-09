@@ -1182,8 +1182,15 @@ body.turbo *, body.turbo *::before, body.turbo *::after {
 }
 
 @keyframes slide-in-left {
-  from { transform: translateX(30px); opacity: 0; }
-  to { transform: translateX(0); opacity: 1; }
+  from { opacity: 0; transform: translateX(30px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+/* أنيميشن إكمال مهمة */
+@keyframes task-pop {
+  0%   { transform: scale(1); }
+  50%  { transform: scale(0.96); background: rgba(0,230,118,0.15); }
+  100% { transform: scale(1); }
 }
 
 /* شريط التبويبات الدراسية */
@@ -1193,6 +1200,17 @@ body.turbo *, body.turbo *::before, body.turbo *::after {
 }
 .study-tabs::-webkit-scrollbar { height: 4px; }
 .study-tabs::-webkit-scrollbar-thumb { background: rgba(0,229,255,0.3); border-radius: 4px; }
+
+.study-tab {
+  transition: all 0.15s var(--ease);
+}
+.study-tab:hover {
+  transform: translateY(-1px);
+  border-color: rgba(0,229,255,0.4) !important;
+}
+.study-tab.active {
+  box-shadow: 0 0 16px rgba(0,229,255,0.12);
+}
 
 /* ═══════════ Responsive — نظام كامل لجميع الأجهزة ═══════════ */
 
